@@ -1,36 +1,33 @@
-from fastapi import APIRouter
-from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from database.session import SessionLocal
+from models.schemas import StrategyCreate, Strategy
+from services.strategy_service import (
+    create_strategy_service,
+    get_strategy_service,
+    list_strategies_service,
+)
 
 router = APIRouter(prefix="/strategies", tags=["strategies"])
 
-@router.post("/")
-def create_strategy(strategy_data: dict):
-    """
-    사용자의 전략 아이디어와 조건을 입력받아 LangGraph 실행
-    """
-    # TODO: LangGraph 실행 및 전략 생성 로직 구현
-    return {"strategy_id": 1, "message": "전략 생성 완료"}
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-@router.get("/{strategy_id}")
-def get_strategy(strategy_id: int):
-    """
-    특정 전략의 상태 및 메타 정보 조회
-    """
-    # TODO: 전략 상태 및 메타 정보 반환 로직 구현
-    return {
-        "strategy_id": strategy_id,
-        "strategy_text": "예시 전략",
-        "period": "2020-2024",
-        "status": "완료"
-    }
+@router.post("/", response_model=Strategy)
+def create_strategy(strategy_data: StrategyCreate, db: Session = Depends(get_db)):
+    return create_strategy_service(db, strategy_data)
 
-@router.get("/")
-def list_strategies(user_id: Optional[int] = None):
-    """
-    전체 전략 리스트 조회 (옵션: 사용자별)
-    """
-    # TODO: 전략 목록 반환 로직 구현
-    return [
-        {"strategy_id": 1, "summary": "전략 요약", "user_id": 1},
-        {"strategy_id": 2, "summary": "다른 전략", "user_id": 2}
-    ]
+@router.get("/{strategy_id}", response_model=Strategy)
+def get_strategy(strategy_id: int, db: Session = Depends(get_db)):
+    strategy = get_strategy_service(db, strategy_id)
+    if not strategy:
+        raise HTTPException(status_code=404, detail="Strategy not found")
+    return strategy
+
+@router.get("/", response_model=list[Strategy])
+def list_strategies(db: Session = Depends(get_db)):
+    return list_strategies_service(db)
