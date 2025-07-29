@@ -1,38 +1,40 @@
-# main_api.py
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from agent_graph import agent_executor
-import uvicorn
+from fastapi import FastAPI, Request
+from agents.marketcontext_agent import MarketContextAgent
+from agents.dataload_agent import DataLoaderAgent
+from agents.strategyplanenr_agent import StrategyPlannerAgent
+from agents.backtest_agent import BackTesterAgent
+from agents.insightreport_agent import InsightReporterAgent
 
-# 입력 모델 정의
-class StrategyRequest(BaseModel):
-    ticker: str
-    start_date: str
-    end_date: str
-    strategy_text: str
-
-# FastAPI 앱
 app = FastAPI()
 
-# API 엔드포인트
-@app.post("/run_strategy/")
-async def run_strategy(req: StrategyRequest):
-    try:
-        # LangGraph DAG 실행
-        result = await agent_executor.ainvoke({
-            "ticker": req.ticker,
-            "start_date": req.start_date,
-            "end_date": req.end_date,
-            "strategy_text": req.strategy_text,
-        })
-        return {
-            "report_summary": result.get("report_summary"),
-            "autocode": result.get("autocode"),
-            "backtest_result": result.get("backtest_result")
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# 각 에이전트 인스턴스화
+market_context_agent = MarketContextAgent()
+data_loader_agent = DataLoaderAgent()
+strategy_planner_agent = StrategyPlannerAgent()
+backtester_agent = BackTesterAgent()
+insight_reporter_agent = InsightReporterAgent()
 
-# 개발용 실행
-if __name__ == "__main__":
-    uvicorn.run("main_api:app", host="0.0.0.0", port=8000, reload=True)
+@app.post("/agents/market-context")
+async def run_market_context(request: Request):
+    state = await request.json()
+    return market_context_agent.invoke(state)
+
+@app.post("/agents/data-loader")
+async def run_data_loader(request: Request):
+    state = await request.json()
+    return data_loader_agent.invoke(state)
+
+@app.post("/agents/strategy-planner")
+async def run_strategy_planner(request: Request):
+    state = await request.json()
+    return strategy_planner_agent.invoke(state)
+
+@app.post("/agents/backtester")
+async def run_backtester(request: Request):
+    state = await request.json()
+    return backtester_agent.invoke(state)
+
+@app.post("/agents/insight-reporter")
+async def run_insight_reporter(request: Request):
+    state = await request.json()
+    return insight_reporter_agent.invoke(state)

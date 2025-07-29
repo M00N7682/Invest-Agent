@@ -4,7 +4,7 @@ from typing import Optional, List
 class StrategyCreate(BaseModel):
     name: str
     description: str
-    conditions: dict
+    conditions: str
 
 class Strategy(BaseModel):
     id: int
@@ -16,8 +16,8 @@ class Strategy(BaseModel):
 class Trade(BaseModel):
     date: str
     price: float
-    return_rate: float
-    type: str
+    return_rate: Optional[float] = None
+    type: str  # "buy" or "sell"
 
 class Metrics(BaseModel):
     CAGR: float
