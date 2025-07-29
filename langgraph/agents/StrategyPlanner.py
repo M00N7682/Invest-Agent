@@ -1,15 +1,23 @@
-# StrategyPlannerAgent: 자연어 전략 입력 → 구조화된 룰 추출 (HyperCLOVA 활용)
+class StrategyPlannerAgent(Runnable):
+    def invoke(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        HYPERCLOVA_API_KEY = os.getenv("HYPERCLOVA_API_KEY")
+        HYPERCLOVA_API_URL = os.getenv("HYPERCLOVA_API_URL")
 
-class StrategyPlannerAgent:
-    def __init__(self, llm_client=None):
-        self.llm_client = llm_client  # HyperCLOVA API 클라이언트 등
+        prompt = state["strategy_text"]
+        headers = {
+            "X-NCP-APIGW-API-KEY": HYPERCLOVA_API_KEY,
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "text": f"'{prompt}' 전략을 기술 지표 조건으로 바꿔줘. 예시: RSI < 30 and Volume > MA20",
+            "maxTokens": 256,
+            "temperature": 0.4
+        }
 
-    def plan(self, user_text: str) -> dict:
-        """
-        자연어 전략 설명을 받아 구조화된 룰(예: {'RSI': '<30', 'Vol': '>MA20'})로 변환
-        """
-        # 실제 구현에서는 HyperCLOVA 호출
-        if self.llm_client:
-            return self.llm_client.extract_rules(user_text)
-        # 예시: 하드코딩
-        return {"rule": "RSI<30 and Vol>MA20"}
+        response = httpx.post(HYPERCLOVA_API_URL, headers=headers, json=payload)
+        if response.status_code == 200:
+            parsed = response.json().get("result", "RSI < 30 and volume > MA20")
+        else:
+            parsed = "RSI < 30 and volume > MA20"
+
+        return {**state, "parsed_strategy": parsed}

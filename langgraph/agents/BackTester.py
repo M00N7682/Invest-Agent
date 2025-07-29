@@ -1,23 +1,40 @@
-# BacktestExecutorAgent: 전략 코드 실행 및 수익률 시뮬레이션
+class BackTesterAgent(Runnable):
+    def invoke(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        import pandas as pd
 
-class BacktestExecutorAgent:
-    def __init__(self):
-        pass
+        df = pd.DataFrame(state["market_data"])
+        rule = state["parsed_strategy"]  # 예: "RSI < 30 and volume > MA20"
 
-    def run(self, rule: dict, data: dict) -> dict:
-        """
-        전략 룰과 데이터로 백테스트 실행, 거래 로그 및 성과 지표 산출
-        """
-        # 실제 구현에서는 룰 파싱 및 시뮬레이션
-        # 예시: 하드코딩
-        return {
-            "trades": [
-                {"date": "2024-01-01", "price": 100, "type": "buy"},
-                {"date": "2024-01-03", "price": 105, "type": "sell"}
-            ],
-            "metrics": {
-                "CAGR": 0.12,
-                "MDD": -0.08,
-                "Sharpe": 1.5
-            }
+        # 조건 파싱 - 단순 텍스트 파싱 기반
+        buy_condition = (df["RSI"] < 30) & (df["volume"] > df["MA20"])
+
+        trades = []
+        position = None
+        entry_price = 0
+
+        for i in range(len(df)):
+            row = df.iloc[i]
+
+            if not position and buy_condition.iloc[i]:
+                position = "long"
+                entry_price = row["close"]
+                trades.append({"date": row["date"].strftime("%Y-%m-%d"), "type": "buy", "price": entry_price})
+
+            elif position == "long" and row["RSI"] > 50:
+                exit_price = row["close"]
+                return_pct = (exit_price - entry_price) / entry_price
+                trades.append({"date": row["date"].strftime("%Y-%m-%d"), "type": "sell", "price": exit_price, "return_pct": round(return_pct, 4)})
+                position = None
+
+        # 성과 지표 계산
+        total_return = sum([t.get("return_pct", 0) for t in trades if t["type"] == "sell"])
+        num_trades = len([t for t in trades if t["type"] == "sell"])
+        avg_return = total_return / num_trades if num_trades > 0 else 0
+
+        result = {
+            "ROI": round(total_return, 4),
+            "AvgReturn": round(avg_return, 4),
+            "NumTrades": num_trades
         }
+
+        return {**state, "backtest_result": result, "trade_logs": trades}

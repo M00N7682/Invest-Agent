@@ -1,17 +1,43 @@
-# InsightReporterAgent: 전략의 해석, 리포트 자동 생성 (HyperCLOVA 활용)
+class InsightReporterAgent(Runnable):
+    def invoke(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        HYPERCLOVA_API_KEY = os.getenv("HYPERCLOVA_API_KEY")
+        HYPERCLOVA_API_URL = os.getenv("HYPERCLOVA_API_URL")
 
-class InsightReporterAgent:
-    def __init__(self, llm_client=None):
-        self.llm_client = llm_client  # HyperCLOVA 등
+        summary_prompt = f"""
+        다음은 전략 성과입니다. 결과를 기반으로 한 전략 리포트입니다.
 
-    def report(self, metrics: dict, context: list) -> dict:
+        전략 조건: {state.get("parsed_strategy")}
+        ROI: {state['backtest_result']['ROI']}
+        평균 수익률: {state['backtest_result']['AvgReturn']}
+        거래 횟수: {state['backtest_result']['NumTrades']}
+        뉴스 정보:
+        {state.get('market_context', [])[:2]}
         """
-        성과 분석 + 시장 상황 기반 요약 보고서 생성
+
+        code_prompt = f"""
+        다음 조건에 해당하는 백테스트용 파이썬 코드를 작성해줘:
+        - 조건: {state.get('parsed_strategy')}
+        - Pandas 기반으로 작성, CSV로부터 데이터 읽기
+        - 진입 조건 충족 시 매수, RSI > 50일 때 매도
+        - 수익률 계산 포함
         """
-        # 실제 구현에서는 HyperCLOVA 호출
-        # 예시: 하드코딩
+
+        headers = {
+            "X-NCP-APIGW-API-KEY": HYPERCLOVA_API_KEY,
+            "Content-Type": "application/json"
+        }
+
+        summary_payload = {"text": summary_prompt, "maxTokens": 512, "temperature": 0.4}
+        code_payload = {"text": code_prompt, "maxTokens": 512, "temperature": 0.2}
+
+        summary_resp = httpx.post(HYPERCLOVA_API_URL, headers=headers, json=summary_payload)
+        code_resp = httpx.post(HYPERCLOVA_API_URL, headers=headers, json=code_payload)
+
+        summary = summary_resp.json().get("result", "리포트 생성 실패")
+        code = code_resp.json().get("result", "코드 생성 실패")
+
         return {
-            "summary": "전략 요약 예시",
-            "insight": "시장 상황에 따라 변동성이 큼",
-            "suggestion": "리스크 관리 강화 필요"
+            **state,
+            "report_summary": summary,
+            "autocode": code
         }

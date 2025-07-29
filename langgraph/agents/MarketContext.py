@@ -1,31 +1,29 @@
-# MarketContextAgent: 거래일별 뉴스/공시 수집 및 요약 (HyperCLOVA 활용)
-import requests
+class MarketContextAgent(Runnable):
+    def invoke(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        from datetime import datetime
 
-class MarketContextAgent:
-    def __init__(self, tavily_api_key: str, llm_client=None):
-        self.tavily_api_key = tavily_api_key
-        self.llm_client = llm_client  # HyperCLOVA 등
+        TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
+        headers = {
+            "Authorization": f"Bearer {TAVILY_API_KEY}"
+        }
 
-    def get_context(self, dates: list, symbol: str) -> list:
-        """
-        거래일별 뉴스/공시 Tavily API로 수집 및 HyperCLOVA 요약
-        """
+        trade_logs = state.get("trade_logs", [])
+        ticker = state["ticker"]
+
         results = []
-        for date in dates:
-            # Tavily API 예시 요청 (실제 엔드포인트/파라미터는 Tavily 문서 참고)
-            response = requests.get(
+        for trade in trade_logs:
+            date_str = trade["date"]
+            query = f"{ticker} {date_str} 뉴스"
+            response = httpx.post(
                 "https://api.tavily.com/search",
-                params={
-                    "query": f"{symbol} 뉴스 OR 공시",
-                    "date": date,
-                    "api_key": self.tavily_api_key
-                }
+                headers=headers,
+                json={"query": query, "max_results": 3}
             )
-            news_items = response.json().get("results", [])
-            # 뉴스 요약 (HyperCLOVA 활용)
-            if self.llm_client and news_items:
-                summary = self.llm_client.summarize("\n".join([item["title"] for item in news_items]))
+            if response.status_code == 200:
+                docs = response.json().get("results", [])
+                summary = "\n".join([d.get("content", "")[:300] for d in docs])
+                results.append({"date": date_str, "summary": summary})
             else:
-                summary = "; ".join([item["title"] for item in news_items])
-            results.append({"date": date, "news": summary})
-        return results
+                results.append({"date": date_str, "summary": "뉴스 수집 실패"})
+
+        return {**state, "market_context": results}

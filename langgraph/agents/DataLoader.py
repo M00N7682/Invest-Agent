@@ -1,19 +1,26 @@
-# DataLoaderAgent: 종목, 기간, 가격, 지표 데이터 확보 및 계산
+from typing import Dict, Any
+from langchain_core.runnables import Runnable
+import pandas as pd
+from ta.momentum import RSIIndicator
+from ta.trend import SMAIndicator
 
-class DataLoaderAgent:
-    def __init__(self, data_source=None):
-        self.data_source = data_source  # DB, API 등
+class DataLoaderAgent(Runnable):
+    def invoke(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        ticker = state["ticker"]
+        start_date = state["start_date"]
+        end_date = state["end_date"]
 
-    def load(self, symbol: str, start: str, end: str) -> dict:
-        """
-        종목, 기간에 맞는 가격/지표 데이터 로딩 및 전처리
-        """
-        # 실제 구현에서는 DB/API에서 데이터 조회
-        # 예시: 하드코딩
-        return {
-            "prices": [100, 102, 105],
-            "dates": ["2024-01-01", "2024-01-02", "2024-01-03"],
-            "RSI": [28, 32, 35],
-            "Vol": [1000, 1200, 1100],
-            "MA20": [101, 102, 103]
-        }
+        # CSV 불러오기
+        df = pd.read_csv(f"data/{ticker}.csv", parse_dates=["date"])
+        df = df[(df["date"] >= start_date) & (df["date"] <= end_date)].copy()
+
+        # 기술 지표 계산
+        df["RSI"] = RSIIndicator(df["close"]).rsi()
+        df["MA20"] = SMAIndicator(df["volume"], window=20).sma_indicator()
+
+        # 필요한 컬럼만 정리
+        df = df[["date", "open", "high", "low", "close", "volume", "RSI", "MA20"]]
+        df = df.dropna().reset_index(drop=True)
+
+        state["market_data"] = df.to_dict(orient="records")
+        return state

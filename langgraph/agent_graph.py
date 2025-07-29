@@ -1,46 +1,45 @@
-from langgraph.graph import StateGraph
-from agents.StrategyPlanner import StrategyPlannerAgent
-from agents.DataLoader import DataLoaderAgent
-from agents.BackTester import BacktestExecutorAgent
-from agents.MarketContext import MarketContextAgent
-from agents.InsightReporter import InsightReporterAgent
+# agent_graph.py
+from langgraph.graph import StateGraph, END
+from langchain_core.runnables import Runnable
 
-# 1. Define state schema (state = Dict[str, Any])
-state_schema = {
-    "strategy_text": str,
-    "ticker": str,
-    "start_date": str,
-    "end_date": str,
-    "parsed_strategy": str,
-    "dataframe": object,
-    "trade_logs": list,
-    "metrics": dict,
-    "news_contexts": list,
-    "report_summary": str,
-    "recommendations": str
-}
+from BackTester import BackTesterAgent
+from DataLoader import DataLoaderAgent
+from InsightReporter import InsightReporterAgent
+from MarketContext import MarketContextAgent
+from StrategyPlanner import StrategyPlannerAgent
 
-# 2. Create LangGraph DAG
-builder = StateGraph(state_schema)
+# 상태 타입 정의
+from typing import TypedDict, List, Dict, Any
 
-# 3. Add nodes
-builder.add_node("planner", StrategyPlannerAgent())
-builder.add_node("loader", DataLoaderAgent())
-builder.add_node("executor", BacktestExecutorAgent())
-builder.add_node("context", MarketContextAgent())
-builder.add_node("reporter", InsightReporterAgent())
+class AgentState(TypedDict):
+    ticker: str
+    start_date: str
+    end_date: str
+    strategy_text: str
+    parsed_strategy: str
+    market_data: List[Dict[str, Any]]
+    market_context: str
+    backtest_result: Dict[str, Any]
+    report_summary: str
+    autocode: str
 
-# 4. Connect edges
-builder.set_entry_point("planner")
-builder.add_edge("planner", "loader")
-builder.add_edge("loader", "executor")
+# Graph 생성
+workflow = StateGraph(AgentState)
 
-# 5. 병렬 처리: 백테스트 후 news context도 분석
-builder.add_edge("executor", "context")
-builder.add_edge("context", "reporter")
+# 노드 등록
+workflow.add_node("loader", DataLoaderAgent())
+workflow.add_node("market", MarketContextAgent())
+workflow.add_node("strategy", StrategyPlannerAgent())
+workflow.add_node("backtest", BackTesterAgent())
+workflow.add_node("insight", InsightReporterAgent())
 
-# 6. 종료 노드 지정
-builder.set_finish_point("reporter")
+# 엣지 구성
+workflow.set_entry_point("loader")
+workflow.add_edge("loader", "market")
+workflow.add_edge("market", "strategy")
+workflow.add_edge("strategy", "backtest")
+workflow.add_edge("backtest", "insight")
+workflow.add_edge("insight", END)
 
-# 7. Build
-graph = builder.compile()
+# Runnable로 export
+agent_executor = workflow.compile()
